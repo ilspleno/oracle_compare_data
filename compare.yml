@@ -1,0 +1,18 @@
+---
+:source:
+  :dbname: EPOL06
+  :username: brian
+  :password: brian
+:target:
+  :dbname: EPOL06
+  :username: brian
+  :password: brian
+:tables:
+- :name: ctfcesse_m
+  :schema: epro
+  :sample: '0.015'
+  :check_column: no_bl
+- :name: ctfbadge_fb
+  :schema: epro
+  :sample: '0.05'
+  :check_column: indadd0
