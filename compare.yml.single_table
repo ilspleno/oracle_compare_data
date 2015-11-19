@@ -1,0 +1,17 @@
+---
+:source:
+  :dbname: EPOL06
+  :username: brian
+  :password: brian
+:target:
+  :dbname: EPOL06
+  :username: brian
+  :password: brian
+:tables:
+- :name: ctfpaydl_d
+  :schema: epro
+  :sample: '0.00003'
+  :check_column: 
+  - donor_id
+  - event_date
+  - criteria_code

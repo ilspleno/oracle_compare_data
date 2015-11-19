@@ -83,6 +83,10 @@ end
 # Ugh this proc is too long, need to refactor it
 def get_rows(db, table, source = true, compare_slice = [])
 
+	# Get the number of items in the source slice, so we know how many bind variables we'll need
+	# We know there's always at least one array in compare slice, so we use index 0
+	source_rowcount = compare_slice[0].length unless compare_slice.empty?
+
 	# Make sure we have a valid hash in table
 	pp table if DEBUG
 	sql = "select * from #{table[:schema]}.#{table[:name]}"
@@ -95,39 +99,55 @@ def get_rows(db, table, source = true, compare_slice = [])
 
 	# If we are not querying source table, then we need to put in a where clause to only select rows given in compare_slice
 	if !source
-		sql = sql + " and #{table[:check_column]} in ("
 
-		puts "Length is #{compare_slice.length}" if DEBUG
+		
+		table[:check_column].each do |col|			
 
-		# Put the right number of bind slots in
-		(1..(compare_slice.length)).each do |i|
-			sql = sql + ":#{i},"
+			sql = sql + " and #{col} in ("
+
+			# Put the right number of bind slots in
+			(1..(source_rowcount)).each do |i|
+				sql = sql + ":#{col}#{i},"
+			end
+
+			# Get rid of final ,
+			sql.chop!
+			sql = sql + ")"
 		end
-		# Get rid of final ,
-		sql.chop!
-		sql = sql + ")"
+
 
 	
 	end
 
 	# No matter what, append an order by clause
-	sql = sql + " order by #{table[:check_column]}"
-		
+	sql = sql + " order by "
+
+	table[:check_column].each do |col|
+		sql = sql + " #{col},"
+	end
+	
+	# Get rid of final , again
+	sql.chop!		
 
 
 	# create cursor
-	puts sql if DEBUG
+	puts sql if table[:name] == "ctfsite_fb" and DEBUG
 	cursor = db.parse sql
 
 	# Assign bind values for target table
 	pp compare_slice if DEBUG
-	index = 1
 	if !source
-		compare_slice.each do |value|
-			cursor.bind_param(index,value)
-			puts "Bound #{index} to #{value} Data Type: #{value.class}" if DEBUG
-			index += 1
+		compare_index = 0
+		table[:check_column].each do |col|
+			index = 1
+			compare_slice[compare_index].each do |val|
+
+				cursor.bind_param("#{col}#{index}", val)
+				index += 1
+			end
+		compare_index += 1
 		end
+		
 	end
 
 	
@@ -144,8 +164,6 @@ def get_rows(db, table, source = true, compare_slice = [])
 		rows << r
 	end
 
-	puts "Fetched #{rows.count} rows" if DEBUG
-
 	return metadata, rows
 
 end
@@ -154,22 +172,27 @@ def get_slice(results, table)
 
 	metadata = results[0]
 	rows = results[1]
-
-	# Get a slice of the results from the table so we can compare the target
 	
-	# Determine the index (position in array) of the column we're looking for	
-	idx = -1
-	metadata.each_index { |i| idx = i if metadata[i].name.downcase == table[:check_column].downcase }
+	row_slices = []
+        table[:check_column].each do |col|
 
-	# Grab out the values from the array for the column that we found
-	row_slice = rows.collect { |r| r[idx] }
+		# Get a slice of the results from the table so we can compare the target
+		
+		# Determine the index (position in array) of the column we're looking for	
+		idx = -1
+		metadata.each_index { |i| idx = i if metadata[i].name.downcase == col.downcase }
 
-	if DEBUG
-		puts "Returning row_slice:"
-		pp row_slice
+		# Grab out the values from the array for the column that we found
+		row_slice = rows.collect { |r| r[idx] }
+
+		if DEBUG
+			puts "Returning row_slice:"
+		end
+
+		row_slices << row_slice
 	end
 
-	return row_slice
+	return row_slices
 
 end
 
@@ -184,7 +207,6 @@ def show_divergence(table_name, source, target)
 
 	# Add source
 	@wb.add_worksheet(:name => "Source #{table_name}") do |sheet|
-		sheet.add_row ["this", "is", "a", "test"]
 		sheet.add_row source_colnames
 
 		source[1].each do |row|
@@ -204,7 +226,24 @@ def show_divergence(table_name, source, target)
 
 end
 
+def tables_match? (src, tgt)
+
+	all_match = true
+
+	src.each do |row|
+		if !(tgt.index row)
+			log_it "Unable to match row in target."
+			log_it row
+			all_match = false
+		end
+	end
+
+	return all_match
+end
+
 # Main
+
+df = File.new "debugfile.txt", "w"
 
 log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@config[:target][:dbname]}"
 
@@ -223,6 +262,11 @@ log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@
 	# Remember each 'table' is actually an array defining the table and what we need to know about it
 	log_it "Processing #{table[:name]}"
 
+	# Convert check_column to an array if it's just a single entry
+	if table[:check_column].class != Array
+		table[:check_column] = [ table[:check_column] ]
+        end
+
 	# Results in an array, 0 = metadata, 1 = array of results
 	source_results = get_rows @source_db, table
 
@@ -232,19 +276,13 @@ log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@
 	# Now get the target database by sending in the key values so we retrieve the same rows
 	target_results = get_rows @target_db, table, false, source_slice
 
-	if DEBUG
-		puts "-----------------------------------" 
-		puts source_results[1][0]
-		puts "==================================="
-		puts target_results[1][0]
-	end
 
-
-	if source_results[1] == target_results[1]
-		log_it "All #{source_results[1].length} rows match", :good
+	if tables_match? source_results[1], target_results[1]
+		log_it "All #{source_results[1].length} rows found on target", :good
 	else
-		log_it "There are divergent rows.", :crit
+		log_it "There are divergent rows. Total sample size is #{source_results[1].length} rows.", :crit
 	end
+
 	show_divergence(table[:name], source_results, target_results)
 
 
