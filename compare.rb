@@ -9,25 +9,11 @@ require 'axlsx'
 
 DEBUG = false
 
-# Evenutally this will be a YAML config
-#@config={}
-#@config[:source] = {}
-#@config[:source][:dbname] = "EPOP01"
-#@config[:source][:username] = 'brian'
-#@config[:source][:password] = 'brian'
-#
-#@config[:target] = {}
-#@config[:target][:dbname] = "EPOQ03"
-#@config[:target][:username] = "brian"
-#@config[:target][:password] = "brian"
-#
-#@config[:tables] = []
-#
-#table = { name: 'ctfbadge_fb',sample:  '0.05', check_column: 'blah' }
-#@config[:tables].push table
-#
-#table = { name: 'ctfcesse_m',sample:  '0.015', check_column: 'blah' }
-#@config[:tables].push table
+if ARGV.index "debug2"
+	DEBUG2 = true
+else
+	DEBUG2 = false
+end
 
 @config = YAML::load_file(File.join(__dir__, 'compare.yml'))
 
@@ -97,25 +83,37 @@ def get_rows(db, table, source = true, compare_slice = [])
 	sql = sql + " where trunc(proxy_stmp) < trunc(sysdate)"
 	
 
+
 	# If we are not querying source table, then we need to put in a where clause to only select rows given in compare_slice
 	if !source
 
-		
-		table[:check_column].each do |col|			
+		sql = sql + " and "
 
-			sql = sql + " and #{col} in ("
+		# Get number of columns in primary key
+		pk_length = table[:check_column].length
 
-			# Put the right number of bind slots in
-			(1..(source_rowcount)).each do |i|
-				sql = sql + ":#{col}#{i},"
+		colindex = 1
+		(0..(source_rowcount-1)).each do |i|
+			sql += "("
+
+			# Each PK column...
+			table[:check_column].each do |col|
+				sql += "#{col} = :#{col}#{colindex} "
+  	 			sql += " and "
+
 			end
+			colindex = colindex + 1
 
-			# Get rid of final ,
-			sql.chop!
-			sql = sql + ")"
+			# Get rid of last "and"
+			sql.chop!.chop!.chop!.chop! 
+
+			sql += ")"
+			
+			# Don't put an 'or' on the last line
+			sql += " or " unless i == ( source_rowcount - 1)
 		end
 
-
+		
 	
 	end
 
@@ -125,13 +123,13 @@ def get_rows(db, table, source = true, compare_slice = [])
 	table[:check_column].each do |col|
 		sql = sql + " #{col},"
 	end
+
 	
 	# Get rid of final , again
 	sql.chop!		
 
-
 	# create cursor
-	puts sql if table[:name] == "ctfsite_fb" and DEBUG
+	puts sql if DEBUG2
 	cursor = db.parse sql
 
 	# Assign bind values for target table
@@ -277,11 +275,19 @@ log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@
 	target_results = get_rows @target_db, table, false, source_slice
 
 
-	if tables_match? source_results[1], target_results[1]
-		log_it "All #{source_results[1].length} rows found on target", :good
+	if source_results[1] == target_results[1]
+		log_it "All rows (#{source_results[1].length}) match.", :good
 	else
-		log_it "There are divergent rows. Total sample size is #{source_results[1].length} rows.", :crit
+		log_it "There are variances between source and target.", :crit
 	end
+
+
+# Old slow way to row compare
+#	if tables_match? source_results[1], target_results[1]
+#		log_it "All #{source_results[1].length} rows found on target", :good
+#	else
+#		log_it "There are divergent rows. Total sample size is #{source_results[1].length} rows.", :crit
+#	end
 
 	show_divergence(table[:name], source_results, target_results)
 
