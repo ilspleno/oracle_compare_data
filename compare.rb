@@ -6,14 +6,28 @@ require 'pp'
 require 'term/ansicolor'
 include Term::ANSIColor
 require 'axlsx'
+require 'optparse'
 
 DEBUG  = false
 DEBUG2 = false
 DEBUG3 = false
 MORERW = false
 
-@config = YAML::load_file(File.join(__dir__, 'compare.yml'))
-@logfile = File.new "compare.log", "w"
+@config_file = "compare.yml"
+
+
+def option_parser
+
+	opt_parser = OptionParser.new do |opts|
+
+		opts.on("-c", "--config FILE", "Use alternate control file.") do |con|
+			@config_file = con
+		end
+			
+	end
+	opt_parser.parse! ARGV
+
+end
 
 def log_it(msg, level = :normal)
 
@@ -254,9 +268,15 @@ end
 
 # Main
 
-df = File.new "debugfile.txt", "w"
+# Process options
+option_parser
+
+# Load Config
+@config = YAML::load_file(@config_file)
+@logfile = File.new "compare.log", "w"
 
 log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@config[:target][:dbname]}"
+log_it "Using control file #{@config_file}"
 
 # Create spreadsheet
 @excel = Axlsx::Package.new
