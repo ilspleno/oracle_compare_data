@@ -1,0 +1,17 @@
+# default.gems generated gem export file. Note that any env variable settings will be missing. Append these after using a ';' field separator
+
+axlsx -v2.0.1
+bigdecimal -v1.2.6
+htmlentities -v4.3.4
+io-console -v0.4.3
+json -v1.8.1
+mini_portile -v0.6.2
+nokogiri -v1.6.6.2
+psych -v2.0.8
+rake -v10.4.2
+rdoc -v4.2.0
+ruby-oci8 -v2.2.1
+rubyzip -v1.0.0
+table_print -v1.5.4
+term-ansicolor -v1.3.2
+tins -v1.7.0
