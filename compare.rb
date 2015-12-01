@@ -86,7 +86,9 @@ def get_rows(db, table, source = true, compare_slice = [])
 	# Add the sample function if we're selecting from the source. DONT want this on the target :)
 	sql = sql + " sample(#{table[:sample]})" if source
 	
-	sql = sql + " where trunc(proxy_stmp) < trunc(sysdate)"
+        # Add date constraint
+	sql = sql + " where trunc(proxy_stmp) between #{@config[:oldest_date]} and #{@config[:newest_date]} "
+
 	
 
 
@@ -245,6 +247,16 @@ def tables_match? (src, tgt)
 	return all_match
 end
 
+def get_db_date(d)
+
+	date_string = ""
+        sql = "select #{d} from dual"
+	@source_db.exec(sql) { |r| date_string = r.to_s }
+	return date_string
+	
+
+end
+
 # Main
 
 df = File.new "debugfile.txt", "w"
@@ -257,6 +269,8 @@ log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@
 
 @source_db = db_connect
 @target_db = db_connect false
+
+log_it "Date range is #{get_db_date @config[:oldest_date]} to #{get_db_date @config[:newest_date]}."
 
 
 
@@ -273,6 +287,12 @@ log_it "Beginning run - comparing databases #{@config[:source][:dbname]} and #{@
 
 	# Results in an array, 0 = metadata, 1 = array of results
 	source_results = get_rows @source_db, table
+
+	# Make sure we got some rows
+	if source_results[1].empty?
+		log_it "Table returned NO ROWS. Skipping comparison", :crit
+		next # Skip the rest of this loop
+	end	
 
 	# Get the slice of data that represents key values
 	source_slice = get_slice source_results, table
