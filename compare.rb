@@ -15,7 +15,10 @@ else
 	DEBUG2 = false
 end
 
+
+
 @config = YAML::load_file(File.join(__dir__, 'compare.yml'))
+@logfile = File.new "compare.log", "w"
 
 def log_it(msg, level = :normal)
 
@@ -38,6 +41,9 @@ def log_it(msg, level = :normal)
 	print msg
 
 	print reset, "\n"
+
+	# And now print to file
+	@logfile.puts "#{Time.now} | #{msg}"
 
 end
 
