@@ -81,7 +81,7 @@ def get_rows(db, table, source = true, compare_slice = [])
 
 	# Make sure we have a valid hash in table
 	pp table if DEBUG
-	sql = "select * from #{table[:schema]}.#{table[:name]}"
+	sql = "select * from #{source ? @config[:source_schema] : @config[:target_schema]}.#{table[:name]}"
 
 	# Add the sample function if we're selecting from the source. DONT want this on the target :)
 	sql = sql + " sample(#{table[:sample]})" if source
@@ -278,7 +278,7 @@ log_it "Date range is #{get_db_date @config[:oldest_date]} to #{get_db_date @con
 @config[:tables].each do |table|
 
 	# Remember each 'table' is actually an array defining the table and what we need to know about it
-	log_it "Processing #{table[:name]}"
+	log_it "Comparing #{@config[:source_schema]}.#{table[:name]} to #{@config[:target_schema]}.#{table[:name]}"
 
 	# Convert check_column to an array if it's just a single entry
 	if table[:check_column].class != Array
@@ -302,9 +302,9 @@ log_it "Date range is #{get_db_date @config[:oldest_date]} to #{get_db_date @con
 
 
 	if source_results[1] == target_results[1]
-		log_it "All rows (#{source_results[1].length}) match.", :good
+		log_it "#{source_results[1].length} rows. ALL match.", :good
 	else
-		log_it "There are variances between source and target.", :crit
+		log_it "#{source_results[1].length} rows. There are variances between source and target.", :crit
 	end
 
 
