@@ -7,15 +7,10 @@ require 'term/ansicolor'
 include Term::ANSIColor
 require 'axlsx'
 
-DEBUG = false
-
-if ARGV.index "debug2"
-	DEBUG2 = true
-else
-	DEBUG2 = false
-end
-
-
+DEBUG  = false
+DEBUG2 = false
+DEBUG3 = false
+MORERW = false
 
 @config = YAML::load_file(File.join(__dir__, 'compare.yml'))
 @logfile = File.new "compare.log", "w"
@@ -141,7 +136,7 @@ def get_rows(db, table, source = true, compare_slice = [])
 	cursor = db.parse sql
 
 	# Assign bind values for target table
-	pp compare_slice if DEBUG
+	pp compare_slice if DEBUG2
 	if !source
 		compare_index = 0
 		table[:check_column].each do |col|
@@ -285,14 +280,65 @@ log_it "Date range is #{get_db_date @config[:oldest_date]} to #{get_db_date @con
 		table[:check_column] = [ table[:check_column] ]
         end
 
-	# Results in an array, 0 = metadata, 1 = array of results
-	source_results = get_rows @source_db, table
+	# Get the source rows (and the right number of them)
+	norows = false
+	total_fail = false
+	source_results = []
 
-	# Make sure we got some rows
-	if source_results[1].empty?
+	# Results in an array, 0 = metadata, 1 = array of results
+	(1..3).each do |i|
+		tmp_source_results = get_rows @source_db, table
+
+		# Make sure we got some rows
+		if tmp_source_results[1].empty?
+			norows = true
+			break # Skip the rest of this loop - we'll never get enough
+		end	
+
+		# Add results we just got to master results
+		if source_results.empty?
+			source_results = tmp_source_results
+		else
+			source_results[1] += tmp_source_results[1]
+		end
+	
+		# Make sure all rows are unique in case we had to go back for more rows	
+		source_results[1].uniq!
+
+		pp source_results[1] if DEBUG3
+
+		# Verify we have the minimum number of rows
+		if (source_results[1].length < table[:min_rows]) and (i < 3)  # Not enough rows but we haven't run 3 times
+			log_it "#{source_results[1].length} rows. Less than required #{table[:min_rows]}. Getting more.", :warn if MORERW
+			next # Run again to get some more
+		elsif (source_results[1].length < table[:min_rows]) and (i == 3)
+			# Three times and still not enough
+			total_fail = true
+			break
+		else
+			# We're done, get out of the loop
+			break
+		end
+	end
+	
+	if norows
 		log_it "Table returned NO ROWS. Skipping comparison", :crit
-		next # Skip the rest of this loop
-	end	
+		next # Go on to the next table
+	end
+
+	if total_fail
+		log_it "Unable to get sufficient rows after 3 attempts. Giving up on this table.", :crit
+		next
+	end
+
+	# Otherwise if we made it this far we DO have enough rows
+	# Trim any extras
+	puts "Initial size: #{source_results[1].length}, min rows is #{table[:min_rows]}" if DEBUG
+        puts "slice 0, #{(table[:min_rows]-1)}" if DEBUG
+	if source_results[1].length > table[:min_rows]
+		source_results[1] = source_results[1].slice(0, (table[:min_rows]))
+		puts "Trimmed to #{source_results[1].length}" if DEBUG
+	end
 
 	# Get the slice of data that represents key values
 	source_slice = get_slice source_results, table
