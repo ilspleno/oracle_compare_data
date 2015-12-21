@@ -1,12 +1,12 @@
 ---
 :source:
-  :dbname: EPOP01
-  :username: brian
-  :password: brian
+  :dbname: EPPRD
+  :username: changeme
+  :password: changeme
 :target:
-  :dbname: EPOL06
-  :username: brian
-  :password: brian
+  :dbname: EPOP01
+  :username: changeme
+  :password: changeme
 :oldest_date: to_date('1970/01/01 00:00:00', 'yyyy/mm/dd hh24:mi:ss')
 :newest_date: trunc(sysdate)
 :source_schema: epro

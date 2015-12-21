@@ -1,0 +1,19 @@
+---
+:source:
+  :dbname: EPPRD
+  :username: changeme
+  :password: changeme
+:target:
+  :dbname: EPOP02
+  :username: changeme
+  :password: changeme
+:oldest_date: to_date('1970/01/01 00:00:00', 'yyyy/mm/dd hh24:mi:ss')
+:newest_date: trunc(sysdate)
+:source_schema: epprd
+:target_schema: eproaudit
+:tables:
+- :name: audit_log_extend
+  :partition_name: AUDIT_LOG_EXTEND_20141115
+  :sample: '0.03'
+  :check_column: audit_logid
+  :min_rows: 25

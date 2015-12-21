@@ -92,11 +92,21 @@ def get_rows(db, table, source = true, compare_slice = [])
 	pp table if DEBUG
 	sql = "select * from #{source ? @config[:source_schema] : @config[:target_schema]}.#{table[:name]}"
 
+	# If a partition is defined, use it
+	if ! (table[:partition_name].nil?)
+		# Partition defined
+		sql = sql + " partition (#{table[:partition_name]}) "
+	end
+
 	# Add the sample function if we're selecting from the source. DONT want this on the target :)
 	sql = sql + " sample(#{table[:sample]})" if source
 	
         # Add date constraint
-	sql = sql + " where trunc(proxy_stmp) between #{@config[:oldest_date]} and #{@config[:newest_date]} "
+        if table[:name].upcase == "AUDIT_LOG_EXTEND"
+		sql = sql + " where trunc(dt_part) between #{@config[:oldest_date]} and #{@config[:newest_date]} "
+	else
+		sql = sql + " where trunc(proxy_stmp) between #{@config[:oldest_date]} and #{@config[:newest_date]} "
+	end
 
 	
 
